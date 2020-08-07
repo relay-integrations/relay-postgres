@@ -1,0 +1,16 @@
+apiVersion: integration/v1
+kind: Integration
+name: postgres
+channel: stable
+version: v20200408
+summary: Postgres
+description: >
+  Tools for interacting with Postgres.
+tags:
+  - collaboration
+license: Apache-2.0
+owner:
+  name: Puppet, Inc.
+  email: relay@puppet.com
+  url: https://puppet.com
+source: git://github.com/relay-integrations/relay-postgres.git

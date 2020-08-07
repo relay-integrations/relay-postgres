@@ -1,0 +1,10 @@
+apiVersion: container/v1
+kind: StepContainer
+name: postgres-query
+inherit: {from: sdk, name: go.v1}
+title: Issues a query to a Postgres database and sets the output to use later.
+description: |
+  This step takes a query and issues it to a Postgres database. The
+  results set as an output as a JSON array.
+settings:
+  CommandPath: cmd/postgres-query

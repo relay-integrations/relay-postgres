@@ -1,0 +1,14 @@
+apiVersion: integration/v1
+kind: Step
+name: postgres-query
+tags: null
+version: 1
+summary: Issue a query to Postgres and stick the results in an output.
+description: |
+  This step takes a query and issues it to a Postgres database. The
+  results set as an output as a JSON array.
+build:
+  apiVersion: build/v1
+  kind: Docker
+publish:
+  repository: relaysh/postgres-query
