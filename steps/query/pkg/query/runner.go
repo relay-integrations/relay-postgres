@@ -14,44 +14,49 @@ func (r *Runner) Close() error {
 	return r.db.Close()
 }
 
-func (r *Runner) Query(stmt string) (*QueryResult, error) {
+func (r *Runner) Query(stmt string) ([]map[string]interface{}, error) {
 	rows, err := r.db.Query(stmt)
 
 	if err != nil {
-		// TODO: It might be necessary to not actually return the query result
-		// directly here and instead just indicate generally there was a failure as
-		// a way of not leaking too much info about what's actually happening here.
 		return nil, err
 	}
 
 	defer rows.Close()
 
-	if cols, err := rows.Columns(); err != nil {
+	columns, err := rows.Columns()
+	if err != nil {
 		return nil, err
-	} else {
-		arr := make([]interface{}, len(cols))
-		ptrs := make([]interface{}, len(cols))
-
-		for i := range arr {
-			ptrs[i] = &arr[i]
-		}
-
-		res := make(QueryResult, 0)
-
-		for rows.Next() {
-			rows.Scan(arr...)
-
-			row := make(QueryRow, len(cols))
-
-			for i, col := range cols {
-				row[col] = arr[i]
-			}
-
-			res = append(res, row)
-		}
-
-		return &res, nil
 	}
+
+	values := make([]interface{}, len(columns))
+	for i := range values {
+		values[i] = new(interface{})
+	}
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+
+		dest := make(map[string]interface{}, len(columns))
+		for i, column := range columns {
+			v := *(values[i].(*interface{}))
+			switch t := v.(type) {
+			case []byte:
+				dest[column] = string(t)
+			default:
+				dest[column] = v
+			}
+		}
+		results = append(results, dest)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 func New(url string) (*Runner, error) {

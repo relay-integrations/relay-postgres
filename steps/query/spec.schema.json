@@ -1,0 +1,27 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "connection": {
+            "type": "object",
+            "description": "Postgres connection",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The Postgres URL to connect to"
+                }
+            },
+            "required": [
+                "url"
+            ]
+        },
+        "statement": {
+            "type": "string",
+            "description": "The query statement to execute"
+        }
+    },
+    "required": [
+        "connection",
+        "statement"
+    ]
+}
