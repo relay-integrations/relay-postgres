@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 
 	"github.com/puppetlabs/relay-sdk-go/pkg/log"
 	"github.com/puppetlabs/relay-sdk-go/pkg/outputs"
 	"github.com/puppetlabs/relay-sdk-go/pkg/taskutil"
 
-	"github.com/relay-integrations/relay-postgres/pkg/query"
+	"github.com/relay-integrations/relay-postgres/steps/query/pkg/query"
 )
 
 // DefaultOutputKey is the key of the output that will be set when the step
@@ -56,28 +55,20 @@ func main() {
 			log.FatalE(err)
 		}
 
-		if buf, err := json.Marshal(res); err != nil {
+		if client, err := outputs.NewDefaultOutputsClientFromNebulaEnv(); err != nil {
 			log.FatalE(err)
 		} else {
-			if client, err := outputs.NewDefaultOutputsClientFromNebulaEnv(); err != nil {
+			if err := client.SetOutput(context.Background(), DefaultOutputKey, res); err != nil {
 				log.FatalE(err)
-			} else {
-				// TODO: Should the key be parameterized?
-				if err := client.SetOutput(context.Background(), DefaultOutputKey, string(buf)); err != nil {
-					log.FatalE(err)
-				}
 			}
 		}
 	}
 }
 
-// This just encapsulates some setup logic to clean up the main function a bit.
 func mustGetDefaultMetadataSpecURL() string {
 	if metadataSpecURL, err := taskutil.MetadataSpecURL(); err != nil {
 		log.FatalE(err)
 
-		// control should exit before we get to here (thanks to the fatal above).
-		// this just makes the compiler shut up.
 		panic(err)
 	} else {
 		return metadataSpecURL
