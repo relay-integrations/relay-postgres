@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
-	"flag"
+	"errors"
+	"time"
 
+	"github.com/puppetlabs/leg/timeutil/pkg/retry"
 	"github.com/puppetlabs/relay-sdk-go/pkg/log"
 	"github.com/puppetlabs/relay-sdk-go/pkg/outputs"
 	"github.com/puppetlabs/relay-sdk-go/pkg/taskutil"
@@ -11,76 +13,90 @@ import (
 	"github.com/relay-integrations/relay-postgres/steps/query/pkg/query"
 )
 
-// DefaultOutputKey is the key of the output that will be set when the step
-// executes successfully.
-const DefaultOutputKey = "results"
+const (
+	DefaultOutputKey    = "results"
+	DefaultQueryTimeout = 5 * time.Minute
+)
 
-// ConnectionSpec contains the relevant connection information. In the Relay
-// product a connection object will be created.
 type ConnectionSpec struct {
 	URL string `json:"url"`
 }
 
-// Spec is the schema for the actual spec.
 type Spec struct {
 	Connection ConnectionSpec `json:"connection"`
 	Statement  string         `json:"statement"`
 }
 
 func main() {
-	var (
-		specURL = flag.String("spec-url", mustGetDefaultMetadataSpecURL(), "url to fetch the spec from")
-	)
+	spec, err := populateSpec()
+	if err != nil {
+		log.FatalE(err)
+	}
 
-	flag.Parse()
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, DefaultQueryTimeout)
+	defer cancel()
 
-	spec := mustPopulateSpec(*specURL)
+	err = retry.Wait(ctx, func(ctx context.Context) (bool, error) {
+		dberr := run(spec)
+
+		if dberr != nil {
+			return retry.Repeat(dberr)
+		}
+
+		return retry.Done(nil)
+	})
+
+	if err != nil {
+		log.FatalE(err)
+	}
+}
+
+func populateSpec() (*Spec, error) {
+	specURL, err := taskutil.MetadataSpecURL()
+	if err != nil {
+		return nil, err
+	}
+
+	opts := taskutil.DefaultPlanOptions{SpecURL: specURL}
+
+	spec := &Spec{}
+	if err := taskutil.PopulateSpecFromDefaultPlan(&spec, opts); err != nil {
+		return nil, err
+	}
 
 	if spec.Connection.URL == "" {
-		log.Fatal("spec is missing a connection URL")
+		return nil, errors.New("spec is missing a connection URL")
 	}
 
 	if spec.Statement == "" {
-		log.Fatal("spec is missing a statement to execute")
+		return nil, errors.New("spec is missing a statement to execute")
 	}
 
+	return spec, nil
+}
+
+func run(spec *Spec) error {
 	if runner, err := query.New(spec.Connection.URL); err != nil {
-		log.FatalE(err)
+		return err
 	} else {
 		defer runner.Close()
 
 		res, err := runner.Query(spec.Statement)
 
 		if err != nil {
-			log.FatalE(err)
+			return err
 		}
 
 		if client, err := outputs.NewDefaultOutputsClientFromNebulaEnv(); err != nil {
-			log.FatalE(err)
+			return err
 		} else {
 			if err := client.SetOutput(context.Background(), DefaultOutputKey, res); err != nil {
-				log.FatalE(err)
+				return err
 			}
 		}
-	}
-}
 
-func mustGetDefaultMetadataSpecURL() string {
-	if metadataSpecURL, err := taskutil.MetadataSpecURL(); err != nil {
-		log.FatalE(err)
-
-		panic(err)
-	} else {
-		return metadataSpecURL
-	}
-}
-
-func mustPopulateSpec(specURL string) (spec Spec) {
-	opts := taskutil.DefaultPlanOptions{SpecURL: specURL}
-
-	if err := taskutil.PopulateSpecFromDefaultPlan(&spec, opts); err != nil {
-		log.FatalE(err)
 	}
 
-	return
+	return nil
 }
