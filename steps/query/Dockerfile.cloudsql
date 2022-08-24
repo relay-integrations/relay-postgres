@@ -1,0 +1,23 @@
+FROM golang:1.16-alpine AS builder
+ENV CGO_ENABLED 0
+WORKDIR /build
+COPY . .
+RUN go build -a -o "/usr/local/bin/relay-postgres-query" "./cmd/postgres-query"
+
+FROM gcr.io/cloudsql-docker/gce-proxy:1.27.0-alpine as cloud_sql_proxy
+
+FROM relaysh/core:latest
+
+COPY --from=builder "/usr/local/bin/relay-postgres-query" "/usr/local/bin/relay-postgres-query"
+
+RUN apk add postgresql-dev gcc musl-dev
+COPY --from=cloud_sql_proxy "/cloud_sql_proxy" "/usr/local/bin/cloud_sql_proxy"
+COPY --from=cloud_sql_proxy "/lib64" "/lib64"
+
+COPY "./step.sh" "/relay/step.sh"
+ENTRYPOINT []
+CMD ["/bin/bash", "/relay/step.sh"]
+
+LABEL "org.opencontainers.image.title"="Execute a Postgres query"
+LABEL "org.opencontainers.image.description"="This step executes a query against a Postgres database and sets the results as an output"
+LABEL "com.puppet.nebula.sdk.version"="v1"
